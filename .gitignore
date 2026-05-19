@@ -1,0 +1,44 @@
+node_modules/
+.vars.json
+*.db
+*.log
+backups/
+.vscode
+backup/
+scripts
+.editorconfig
+app2.js
+README-SC1FORCR.md
+
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtime / PM2 / temporary
+.pm2/
+logs/
+tmp/
+temp/
+*.pid
+*.tmp
+
+# Local backup / restore files
+*.bak
+*.corrupt
+*.old
+
+# Local helper scripts (jangan ikut ke repo)
+__tmp_*.js
+_patch_*.js
+_fix_*.js
+_ins_*.js
+_insert_*.js
+
+# Python venv/session dari XL service
+me-cli-sunset-main/.venv/
+me-cli-sunset-main/user_sessions/
+me-cli-sunset-main/__pycache__/
