@@ -3343,10 +3343,9 @@ bot.command('admin', async (ctx) => {
 });
 
 async function sendMainMenu(ctx) {
+  // Ambil data user
   const userId = ctx.from.id;
-  const userName = ctx.from.first_name || 'Pelanggan';
-  
-  // Ambil saldo dari database
+  const userName = ctx.from.first_name || '-';
   let saldo = 0;
   try {
     const row = await new Promise((resolve, reject) => {
@@ -3357,91 +3356,143 @@ async function sendMainMenu(ctx) {
     saldo = row ? row.saldo : 0;
   } catch (e) { saldo = 0; }
 
-  // Cek status reseller
+  // Statistik user
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).getTime();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  let userToday = 0, userWeek = 0, userMonth = 0;
+  let globalToday = 0, globalWeek = 0, globalMonth = 0;
+  try {
+    userToday = await new Promise((resolve) => {
+      db.get(
+        'SELECT COUNT(*) as count FROM transactions WHERE user_id = ? AND timestamp >= ? AND type IN ("ssh","vmess","vless","trojan","shadowsocks","udp_http","zivpn") AND reference_id NOT LIKE "account-trial-%"',
+        [userId, todayStart],
+        (err, row) => resolve(row ? row.count : 0)
+      );
+    });
+    userWeek = await new Promise((resolve) => {
+      db.get(
+        'SELECT COUNT(*) as count FROM transactions WHERE user_id = ? AND timestamp >= ? AND type IN ("ssh","vmess","vless","trojan","shadowsocks","udp_http","zivpn") AND reference_id NOT LIKE "account-trial-%"',
+        [userId, weekStart],
+        (err, row) => resolve(row ? row.count : 0)
+      );
+    });
+    userMonth = await new Promise((resolve) => {
+      db.get(
+        'SELECT COUNT(*) as count FROM transactions WHERE user_id = ? AND timestamp >= ? AND type IN ("ssh","vmess","vless","trojan","shadowsocks","udp_http","zivpn") AND reference_id NOT LIKE "account-trial-%"',
+        [userId, monthStart],
+        (err, row) => resolve(row ? row.count : 0)
+      );
+    });
+    globalToday = await new Promise((resolve) => {
+      db.get(
+        'SELECT COUNT(*) as count FROM transactions WHERE timestamp >= ? AND type IN ("ssh","vmess","vless","trojan","shadowsocks","udp_http","zivpn") AND reference_id NOT LIKE "account-trial-%"',
+        [todayStart],
+        (err, row) => resolve(row ? row.count : 0)
+      );
+    });
+    globalWeek = await new Promise((resolve) => {
+      db.get(
+        'SELECT COUNT(*) as count FROM transactions WHERE timestamp >= ? AND type IN ("ssh","vmess","vless","trojan","shadowsocks","udp_http","zivpn") AND reference_id NOT LIKE "account-trial-%"',
+        [weekStart],
+        (err, row) => resolve(row ? row.count : 0)
+      );
+    });
+    globalMonth = await new Promise((resolve) => {
+      db.get(
+        'SELECT COUNT(*) as count FROM transactions WHERE timestamp >= ? AND type IN ("ssh","vmess","vless","trojan","shadowsocks","udp_http","zivpn") AND reference_id NOT LIKE "account-trial-%"',
+        [monthStart],
+        (err, row) => resolve(row ? row.count : 0)
+      );
+    });
+  } catch (e) {}
+
+  // Jumlah pengguna bot
+  let jumlahPengguna = 0;
+  
+  // Cek status reseller - GUNAKAN VARIABLE YANG SUDAH ADA
   let isReseller = false;
   if (fs.existsSync(resselFilePath)) {
     const resellerList = fs.readFileSync(resselFilePath, 'utf8').split('\n').map(x => x.trim());
     isReseller = resellerList.includes(userId.toString());
   }
-  const statusReseller = isReseller ? '👑 Reseller (Mitra)' : '👤 Member Biasa';
-
-  // Ambil username Telegram admin (jika ada fungsinya, atau biarkan default 'Admin')
-  const tgAdmin = typeof getAdminTelegramUsername === 'function' ? getAdminTelegramUsername() : 'Admin';
+  const statusReseller = isReseller ? 'Reseller' : 'Bukan Reseller';
   
-  // Desain Pesan Utama yang lebih rapi dan elegan
+  try {
+    const row = await new Promise((resolve, reject) => {
+      db.get('SELECT COUNT(*) AS count FROM users', (err, row) => { if (err) reject(err); else resolve(row); });
+    });
+    jumlahPengguna = row.count;
+  } catch (e) { jumlahPengguna = 0; }
+
+  // Latency (dummy, bisa diubah sesuai kebutuhan)
+  const latency = (Math.random() * 0.1 + 0.01).toFixed(2);
+
   const messageText = `
-╔════════════════════════════════╗
- ✨ <b>${typeof NAMA_STORE !== 'undefined' ? NAMA_STORE.toUpperCase() : 'PREMIUM VPN STORE'}</b> ✨
-╚════════════════════════════════╝
+<code>┏━━━━━━━━━━━━━━━━━━━━┓</code>
+<b>🚀 BOT VPN ${NAMA_STORE}</b>
+<code>┗━━━━━━━━━━━━━━━━━━━━┛</code>
 
-Halo <b>${userName}</b>! 👋
-Selamat datang di pusat layanan VPN Premium. Nikmati koneksi berkecepatan tinggi, stabil, dan aman untuk segala kebutuhan internetmu.
+<code>┏━━━━━━━━━━━━━━━━━━━━┓</code>
+<b>👤 INFORMASI PENGGUNA</b>
+<code>┣━━━━━━━━━━━━━━━━━━━━┫</code>
+• 👤 <b>Nama</b>    : ${userName}
+• 🆔 <b>ID</b>      : <code>${userId}</code>
+• 💰 <b>Saldo</b>   : <code>Rp ${saldo}</code>
+• 🏷️ <b>Status</b>  : ${statusReseller}
+<code>┗━━━━━━━━━━━━━━━━━━━━┛</code>
 
-┌─ 📋 <b>DATA AKUN KAMU</b>
-│ 🆔 <b>ID Telegram</b> : <code>${userId}</code>
-│ 💰 <b>Sisa Saldo</b>  : <code>Rp ${saldo.toLocaleString('id-ID')}</code>
-│ 🏷️ <b>Tipe Akun</b>   : <b>${statusReseller}</b>
-└────────────────────────────────
+<code>┏━━━━━━━━━━━━━━━━━━━━┓</code>
+<b>📊 STATISTIK ANDA HARI INI</b>
+<code>┣━━━━━━━━━━━━━━━━━━━━┫</code>
+• 📅 <b>Hari Ini</b>   : ${userToday} akun
+• 📆 <b>Minggu Ini</b> : ${userWeek} akun  
+• 🗓️ <b>Bulan Ini</b>  : ${userMonth} akun
+<code>┗━━━━━━━━━━━━━━━━━━━━┛</code>
 
-┌─ 📞 <b>LAYANAN BANTUAN (CS)</b>
-│ 💬 <b>Telegram</b> : @${tgAdmin.replace('@', '')}
-│ 🌐 <b>WhatsApp</b> : <i>Cek menu Hubungi Admin</i>
-└────────────────────────────────
+<code>┏━━━━━━━━━━━━━━━━━━━━┓</code>
+<b>🌍 STATISTIK GLOBAL</b>
+<code>┣━━━━━━━━━━━━━━━━━━━━┫</code>
+• 📅 <b>Hari Ini</b>   : ${globalToday} akun
+• 📆 <b>Minggu Ini</b> : ${globalWeek} akun
+• 🗓️ <b>Bulan Ini</b>  : ${globalMonth} akun
+<code>┗━━━━━━━━━━━━━━━━━━━━┛</code>
 
-💡 <i>Tips: Ketik perintah <b>/start</b> kapan saja untuk kembali ke menu ini atau jika bot tidak merespons.</i>
-
-👇 <b>Silakan pilih menu transaksi di bawah ini:</b>
+<code>┏━━━━━━━━━━━━━━━━━━━━┓</code>
+<b>📈 STATUS SISTEM</b>
+<code>┣━━━━━━━━━━━━━━━━━━━━┫</code>
+👥 <b>Users</b>    : ${jumlahPengguna}
+⏱️ <b>Latency</b>  : ${latency} ms
+👨‍💻 <b>Edited by</b> : 1FORCR
+<code>┗━━━━━━━━━━━━━━━━━━━━┛</code>
 `;
 
-  // Susunan Tombol yang lebih seimbang
+  // Buat keyboard dasar untuk semua user
   let keyboard = [
     [
-      { text: '🛍️ Beli Akun VPN', callback_data: 'service_create' },
-      { text: '⏱️ Coba Trial', callback_data: 'service_trial' }
+      { text: '➕ Buat Akun', callback_data: 'service_create' },
+      { text: '⌛ Trial Akun', callback_data: 'service_trial' }
     ],
     [
-      { text: '♻️ Perpanjang', callback_data: 'service_renew' },
-      { text: '🗂️ Akun Saya', callback_data: 'view_accounts' }
-    ]
+      { text: '🗑️ Hapus Akun Saya', callback_data: 'delete_my_account_intro' },
+      { text: '📂 Lihat Akun Saya', callback_data: 'view_accounts' }
+    ],
+    [
+      { text: '🧰 Tools', callback_data: 'menu_tools' },
+      { text: '📞 Hubungi Admin', callback_data: 'hubungi_admin' }
+    ],
+    [
+      { text: '🔍 Cek Masa Aktif Akun Saya', callback_data: 'check_expiry_account' }
+    ],
+    [
+     // { text: '📘 Tutorial Penggunaan Bot', callback_data: 'tutorial_bot' }
+    ],
+    [
+      { text: '🤝 Jadi Reseller harga lebih murah!!', callback_data: 'jadi_reseller' }
+    ],
   ];
 
-  // Munculkan opsi Topup jika fiturnya aktif
-  if (typeof loadTopupAutoSetting === 'function' && loadTopupAutoSetting()) {
-    keyboard.push([{ text: '💳 TopUp Saldo Otomatis (QRIS)', callback_data: 'topup_saldo' }]);
-  }
-
-  // Tombol bantuan dan tools
-  keyboard.push([
-    { text: '🧰 Tools Bot', callback_data: 'menu_tools' },
-    { text: '📞 Hubungi Admin (WA/Tele)', callback_data: 'hubungi_admin' }
-  ]);
-
-  // Tombol khusus Reseller vs Non-Reseller
-  if (isReseller) {
-    keyboard.push([
-      { text: '🔓 Buka Akun (Unlock)', callback_data: 'service_unlock' },
-      { text: '🔒 Kunci Akun (Lock)', callback_data: 'service_lock' }
-    ]);
-  } else {
-    keyboard.push([{ text: '🤝 Join Reseller (Diskon Khusus!)', callback_data: 'jadi_reseller' }]);
-  }
-
-  // Tombol khusus Admin
-  if (typeof adminIds !== 'undefined' && adminIds.includes(userId)) {
-    keyboard.push([{ text: '👑 MASUK PANEL ADMIN 👑', callback_data: 'admin_menu' }]);
-  }
-
-  // Kirim atau Edit pesan
-  try {
-    if (ctx.updateType === 'callback_query') {
-      await ctx.editMessageText(messageText, { parse_mode: 'HTML', reply_markup: { inline_keyboard: keyboard } });
-    } else {
-      await ctx.reply(messageText, { parse_mode: 'HTML', reply_markup: { inline_keyboard: keyboard } });
-    }
-  } catch (error) {
-    if (typeof logger !== 'undefined') logger.error('Error saat mengirim menu utama:', error);
-  }
-}
   if (loadTopupAutoSetting()) {
     const topupIndex = keyboard.findIndex(row =>
       row.some(btn => btn.callback_data === 'topup_saldo')
@@ -8775,29 +8826,49 @@ bot.action('cek_saldo_user', async (ctx) => {
 bot.action('jadi_reseller', async (ctx) => {
   await ctx.answerCbQuery().catch(() => {});
 
-  const tgAdmin = getAdminTelegramUsername();
+  const userId = ctx.from.id;
+  const terms = loadResellerTerms();
   const waUrl = getAdminWhatsappUrl();
+  const username = ctx.from.username ? '@' + ctx.from.username : '-';
+  const fullName = (ctx.from.first_name || '') + (ctx.from.last_name ? ' ' + ctx.from.last_name : '');
+
+  const autoMessage = encodeURIComponent(
+    'Halo Admin, saya ingin daftar reseller VPN.\n\n' +
+    'ID Telegram: ' + userId + '\n' +
+    'Username: ' + username + '\n' +
+    'Nama: ' + (fullName || '-') + '\n' +
+    'Siap top up awal: ' + formatRupiah(terms.join_topup_min) + '\n\n' +
+    'Mohon info langkah lanjutnya.'
+  );
+
+  const waAutoUrl = waUrl ? (waUrl + '?text=' + autoMessage) : null;
 
   const message =
-    `╔════════════════════════════════╗\n` +
-    `   🤝 JOIN MITRA RESELLER VPN\n` +
-    `╚════════════════════════════════╝\n\n` +
-    `Ingin jualan VPN dan mendapatkan harga modal yang jauh lebih murah? Bergabunglah menjadi Reseller Resmi kami!\n\n` +
-    `*Keuntungan Reseller:*\n` +
-    `✅ Harga akun lebih murah\n` +
-    `✅ Fitur Lock/Unlock akun pengguna\n` +
-    `✅ Prioritas bantuan admin\n\n` +
-    `Pendaftaran saat ini dilakukan secara manual. Silakan hubungi admin kami melalui kontak di bawah ini untuk pendaftaran & persyaratannya:`;
+    '*PROGRAM RESELLER VPN*\n\n' +
+    'Naik level jadi reseller dan dapat harga akun lebih hemat untuk jual ulang.\n\n' +
+    '*Benefit Reseller:*\n' +
+    '- Harga akun lebih murah\n' +
+    '- Bisa buat akun kapan saja\n' +
+    '- Dukungan langsung dari admin\n' +
+    '- Akses promo dan bonus reseller\n\n' +
+    '*Syarat Bergabung:*\n' +
+    '> Top up jadi reseller: *' + formatRupiah(terms.join_topup_min) + '* (langsung masuk saldo)\n' +
+    '> Minimal top up bulanan: *' + formatRupiah(terms.min_topup) + '*\n\n' +
+    '*Jika Tidak Memenuhi Minimal Top Up Bulanan:*\n' +
+    '- Status reseller akan otomatis dinonaktifkan di akhir periode bulanan\n' +
+    '- Harga reseller tidak berlaku sampai status reseller diaktifkan kembali\n\n' +
+    '*Data Anda:*\n' +
+    '- ID: ' + userId + '\n' +
+    '- Username: ' + username + '\n\n' +
+    (waUrl
+      ? 'Klik tombol di bawah untuk topup jadi reseller (manual) via WhatsApp admin.'
+      : 'Nomor WhatsApp admin belum diset. Silakan hubungi admin untuk aktivasi kontak.');
 
-  const inlineKeyboard = [
-    [{ text: '💬 Chat Admin (Telegram)', url: `https://t.me/${tgAdmin.replace(/^@/, '')}` }]
-  ];
-  
-  if (waUrl) {
-    inlineKeyboard.push([{ text: '📱 Chat Admin (WhatsApp)', url: waUrl }]);
+  const inlineKeyboard = [];
+  inlineKeyboard.push([{ text: 'Topup Jadi Reseller', callback_data: 'reseller_join_topup' }]);
+  if (waAutoUrl) {
+    inlineKeyboard.push([{ text: 'Topup jadi reseller manual', url: waAutoUrl }]);
   }
-  
-  inlineKeyboard.push([{ text: '🔙 Kembali', callback_data: 'send_main_menu' }]);
 
   await ctx.reply(message, {
     parse_mode: 'Markdown',
@@ -8978,36 +9049,6 @@ bot.action('send_main_menu', async (ctx) => {
     return ctx.reply('❌ *GAGAL!* Terjadi kesalahan saat memproses permintaan Anda. Silakan coba lagi nanti.', { parse_mode: 'Markdown' });
   }
   await sendMainMenu(ctx);
-});
-
-bot.action('create_pay_qris', async (ctx) => {
-   await ctx.answerCbQuery().catch(()=>{});
-   const state = userState[ctx.from.id];
-   if (!state || !state.totalHarga) return ctx.reply("⚠️ Sesi pembuatan akun telah kedaluwarsa. Silakan ulangi dari awal.");
-   
-   // Arahkan ke TopUp dengan jumlah tagihan pas
-   global.depositState[ctx.from.id] = {
-       action: 'request_amount',
-       amount: state.totalHarga.toString(),
-       topupPurpose: 'regular',
-       minAmount: state.totalHarga
-   };
-   
-   await ctx.reply("ℹ️ *INFO:* Pembayaran QRIS akan memproses TopUp Saldo Anda secara otomatis. Setelah pembayaran terverifikasi, silakan ulangi pembuatan akun dan pilih metode *Potong Saldo Bot*.", {parse_mode: 'Markdown'});
-   await processDeposit(ctx, state.totalHarga, global.depositState[ctx.from.id]);
-});
-
-bot.action('create_pay_saldo', async (ctx) => {
-   await ctx.answerCbQuery().catch(()=>{});
-   const state = userState[ctx.from.id];
-   if (!state || !state.totalHarga) return ctx.reply("⚠️ Sesi pembuatan akun telah kedaluwarsa. Silakan ulangi dari awal.");
-   
-   // Proses potong saldo ada di sini (Menyambungkan dengan logic lama)
-   // Untuk keamanan kode yang panjang, kita kembalikan ke sistem `reserveAccountChargeAtomic` yang sudah ada di file aslimu:
-   await ctx.reply("⏳ Memproses pembuatan akun Anda menggunakan saldo...");
-   
-   // Kirim pesan palsu seolah-olah user mengetik nominal hari secara normal agar fungsi aslinya ter-trigger kembali, 
-   // Atau memanggil ulang fungsi pembuatan (kamu bisa merangkai langsung dari `reserveAccountChargeAtomic` aslimu).
 });
 
 bot.action('trial_vmess', async (ctx) => {
@@ -11543,8 +11584,8 @@ if (action === 'trial') {
     if (!state.username) {
       return ctx.reply('❌ *Username tidak valid. Masukkan username yang valid| Masukan Ulang Username: *', { parse_mode: 'Markdown' });
     }
-    if (state.username.length < 3 || state.username.length > 20) {
-      return ctx.reply('❌ *Username harus terdiri dari 3 hingga 20 karakter| Masukan Ulang Username: *', { parse_mode: 'Markdown' });
+    if (state.username.length < 4 || state.username.length > 20) {
+      return ctx.reply('❌ *Username harus terdiri dari 4 hingga 20 karakter| Masukan Ulang Username: *', { parse_mode: 'Markdown' });
     }
     if (/[A-Z]/.test(state.username)) {
       return ctx.reply('❌ *Username tidak boleh menggunakan huruf kapital. Gunakan huruf kecil saja| Masukan Ulang Username: *', { parse_mode: 'Markdown' });
@@ -11581,58 +11622,11 @@ if (action === 'trial') {
     }
     state.step = `exp_${state.action}_${state.type}`;
     await ctx.reply('⏳ *Masukkan masa aktif (hari):*', { parse_mode: 'Markdown' });
-  } } else if (state.step.startsWith('exp_')) {
+  } else if (state.step.startsWith('exp_')) {
     const expInput = ctx.message.text.trim();
     if (!/^\d+$/.test(expInput)) {
-      return ctx.reply('❌ *Masa aktif hanya boleh angka, contoh: 30*', { parse_mode: 'Markdown' });
+      return ctx.reply('❌ *Masa aktif tidak valid. Masukkan angka yang valid.*', { parse_mode: 'Markdown' });
     }
-    const exp = parseInt(expInput, 10);
-
-    // BISA DIUBAH: Minimal dan Maksimal Masa Aktif Pembelian
-    const MIN_HARI = 1;
-    const MAX_HARI = 365;
-
-    if (isNaN(exp) || exp < MIN_HARI || exp > MAX_HARI) {
-      return ctx.reply(`❌ *Masa aktif tidak valid. Harus antara ${MIN_HARI} sampai ${MAX_HARI} hari.*`, { parse_mode: 'Markdown' });
-    }
-    
-    state.exp = exp;
-
-    db.get('SELECT quota, iplimit, domain, nama_server, harga, harga_reseller, harga_1ip, harga_2ip, harga_reseller_1ip, harga_reseller_2ip FROM Server WHERE id = ?', [state.serverId], async (err, server) => {
-      if (!server) return ctx.reply('❌ *Server tidak ditemukan.*', { parse_mode: 'Markdown' });
-
-      state.serverDomain = server.domain || '';
-      state.serverName = server.nama_server || server.domain || '';
-      state.quota = Number(state.accountQuota || 0) > 0 ? Number(state.accountQuota) : server.quota;
-      state.iplimit = state.selectedIpPackage === 2 ? 4 : 2; 
-
-      const isResellerUser = await isUserReseller(ctx.from.id).catch(() => false);
-      const selectedPackage = (state.selectedIpPackage || 1) === 2 ? 2 : 1;
-      const harga = getEffectiveServerPackagePrice(server, isResellerUser, selectedPackage);
-      const totalHarga = harga * state.exp;
-      
-      // Simpan total harga ke state untuk callback pembayaran nanti
-      state.totalHarga = totalHarga;
-      
-      const msgOpsi = 
-        `🛒 *RINGKASAN TRANSAKSI*\n\n` +
-        `• Layanan  : \`${state.type.toUpperCase()}\`\n` +
-        `• Username : \`${state.username}\`\n` +
-        `• Server   : \`${state.serverName}\`\n` +
-        `• Durasi   : \`${state.exp} Hari\`\n` +
-        `• Total    : *Rp ${totalHarga.toLocaleString('id-ID')}*\n\n` +
-        `Silakan pilih metode pembayaran di bawah ini:`;
-        
-      const keyboard = [
-        [{ text: '📱 Bayar via QRIS (Rekomendasi)', callback_data: 'create_pay_qris' }],
-        [{ text: '💰 Potong Saldo Bot', callback_data: 'create_pay_saldo' }],
-        [{ text: '❌ Batalkan', callback_data: 'send_main_menu' }]
-      ];
-      
-      await ctx.reply(msgOpsi, { parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } });
-    });
-    return;
-  }
 // Cek hanya angka
 if (!/^\d+$/.test(expInput)) {
   return ctx.reply('❌ *Masa aktif hanya boleh angka, contoh: 30*', { parse_mode: 'Markdown' });
@@ -13896,17 +13890,17 @@ async function processDeposit(ctx, amount, options = {}) {
 `⚠️ *PENTING: Setelah transfer, WAJIB tekan tombol "✅ Sudah Bayar, Cek Status" di bawah QRIS.*
 
 💵 *Total Bayar:* *Rp ${finalAmount.toLocaleString('id-ID')}*
-💰 Nominal Topup: Rp ${amountNum.toLocaleString('id-ID')}
-🎲 Biaya layanan bot otomatis: Rp ${adminFee.toLocaleString('id-ID')}
+💰 Topup: Rp ${amountNum.toLocaleString('id-ID')}
+🎲 Biaya admin: Rp ${adminFee.toLocaleString('id-ID')}
 
 🧾 *Langkah Singkat*
 1. Scan QRIS
-2. Bayar *TEPAT* sesuai Total Bayar (Termasuk biaya layanan)
+2. Bayar *tepat* Rp ${finalAmount.toLocaleString('id-ID')}
 3. ${gatewayProvider === 'orderkuota' ? 'Tekan tombol *✅ Sudah Bayar, Cek Status*' : 'Tunggu verifikasi otomatis 1-2 menit'}
 
 ⏰ QRIS berlaku ${qrExpireMinutes} menit
-${gatewayProvider === 'orderkuota' ? 'ℹ️ Saldo masuk setelah tombol ditekan lalu pembayaran terdeteksi sistem\n' : ''}🆔 Ref: \`${referenceId}\`${purposeLine}`; 
-
+${gatewayProvider === 'orderkuota' ? 'ℹ️ Saldo masuk setelah tombol ditekan lalu pembayaran terdeteksi sistem\n' : ''}🆔 Ref: \`${referenceId}\`${purposeLine}`;
+    
     const paymentKeyboard = gatewayProvider === 'orderkuota'
       ? {
           inline_keyboard: [[
@@ -14771,8 +14765,8 @@ async function generateUniqueFee(baseAmount, userId, existingDeposits) {
   while (attempts < maxAttempts && !foundUnique) {
     attempts++;
     
-    // Generate random fee 200-700 dengan variasi lebih banyak
-    adminFee = Math.floor(Math.random() * (700 - 250 + 1)) + 250;
+    // Generate random fee 100-200 dengan variasi lebih banyak
+    adminFee = Math.floor(Math.random() * 101) + 100;
     
     // Tambahkan random adjustment kecil (0-99) untuk lebih unik
     const randomAdjustment = Math.floor(Math.random() * 100);
